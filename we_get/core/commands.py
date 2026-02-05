@@ -3,7 +3,7 @@ Copyright (c) 2016-2020 we-get developers (https://github.com/rachmadaniHaryono/
 See the file 'LICENSE' for copying.
 """
 
-# COMMANDS - built in we-get shell commands.
+# COMMANDS - built in tget shell commands.
 COMMANDS = {
     'show': {
         'help': 'Show torrent',

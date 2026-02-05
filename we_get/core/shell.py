@@ -152,14 +152,14 @@ class Shell(object):
                 style=we_get_prompt_style
             )
             try:
-                p = prompt(u'we-get > ', **kwargs)
+                p = prompt(u'tget > ', **kwargs)
             except TypeError as e:
                 log.debug('{}:{}'.format(type(e), e))
                 kwargs.pop('history')
                 if PROMPT_TOOLKIT_V2:
                     p = session.prompt(u'we-get > ', **kwargs)
                 else:
-                    p = prompt(u'we-get > ', **kwargs)
+                    p = prompt(u'tget > ', **kwargs)
 
             if self.prompt_no_command(p):
                 continue

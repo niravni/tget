@@ -27,7 +27,7 @@ from we_get.core.utils import (
 )
 
 __version__ = "1.1.5"
-__doc__ = """Usage: we-get [options]...
+__doc__ = """Usage: tget [options]...
 
 Options:
   -s --search=<text>    Search for a torrent.
@@ -198,7 +198,7 @@ class WGSelect(object):
             [print(self.items[item]["link"]) for item in self.items]
         else:
             # XXX: import we_get.core.shell is here for optimization.
-            # we-get will load 50% faster!
+            # tget will load 50% faster!
             from we_get.core.shell import Shell
 
             self.shell = Shell()

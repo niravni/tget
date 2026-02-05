@@ -17,23 +17,38 @@ class Module(object):
     def __init__(self):
         self.cursor = None
 
-    def http_get_request(self, url):
+    def http_get_request(self, url, timeout=10):
         """http_request: create HTTP request.
+        @url: URL to request
+        @timeout: Request timeout in seconds (default: 10)
         @return: data.
         """
         headers = [("User-Agent", USER_AGENT), ("Accept", "*/*")]
-        res = requests.get(url, headers=dict(headers))
         try:
+            res = requests.get(url, headers=dict(headers), timeout=timeout)
             return res.text
+        except requests.exceptions.Timeout:
+            print("Error: Timeout when opening following url: {}".format(url))
+            raise
         except Exception as err:
             print("Error when opening following url: {}.\n{}".format(err, url))
             raise err
 
-    def http_custom_get_request(self, url, headers):
+    def http_custom_get_request(self, url, headers, timeout=10):
         """http_custom_get_request: HTTP GET request with custom headers.
+        @url: URL to request
+        @headers: Custom headers dictionary
+        @timeout: Request timeout in seconds (default: 10)
         @return: data.
         """
-        return requests.get(url, headers).text
+        try:
+            return requests.get(url, headers=headers, timeout=timeout).text
+        except requests.exceptions.Timeout:
+            print("Error: Timeout when opening following url: {}".format(url))
+            raise
+        except Exception as err:
+            print("Error when opening following url: {}.\n{}".format(err, url))
+            raise
 
     def magnet2name(self, link):
         """magnet2name: return torrent name from magnet link.

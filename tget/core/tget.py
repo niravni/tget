@@ -65,13 +65,16 @@ class WGSelect(object):
         self.results_type = None
         self.results = None
         self.filter = None
+        self.quality = None
         self.parse_args()
         self.sort_type = None
 
     def parse_args(self):
         for arg in self.pargs:
-            if arg == "--filter" or arg == "--quality":
+            if arg == "--filter":
                 self.filter = self.pargs[arg][0]
+            elif arg == "--quality":
+                self.quality = self.pargs[arg][0]
             elif arg == "--results":
                 self.results = int(self.pargs[arg][0])
             elif arg == "--target":

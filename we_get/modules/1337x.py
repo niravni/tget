@@ -38,6 +38,8 @@ class leetx(object):
         for opt in self.pargs:
             if opt == "--search":
                 self.action = "search"
+                # 1337x search URLs work better with + for spaces, or sometimes just spaces
+                # We'll encode it properly in the search method
                 self.search_query = self.pargs[opt][0]
             elif opt == "--list":
                 self.action = "list"
@@ -127,27 +129,57 @@ class leetx(object):
         
         try:
             # Try multiple domains if first one fails
-            for base_url in BASE_URLS:
-                url = "%s%s" % (base_url, SEARCH_LOC % (quote_plus(self.search_query)))
-                if debug:
-                    print(f"[DEBUG 1337x] Trying URL: {url}")
-                try:
-                    # Use cloudscraper for 1337x to bypass Cloudflare protection
-                    data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+            # 1337x search URLs: try different encodings for spaces
+            # Format 1: + for spaces (quote_plus) - most common
+            # Format 2: %20 for spaces (quote) - alternative
+            # Format 3: - for spaces - some sites prefer this
+            search_formats = [
+                quote_plus(self.search_query),  # spaces -> +
+                self.search_query.replace(' ', '+'),  # explicit + replacement
+                self.search_query.replace(' ', '%20'),  # %20 encoding
+                self.search_query.replace(' ', '-'),  # dash replacement (some sites prefer this)
+            ]
+            
+            # Remove duplicates while preserving order
+            seen_formats = set()
+            unique_formats = []
+            for fmt in search_formats:
+                if fmt not in seen_formats:
+                    seen_formats.add(fmt)
+                    unique_formats.append(fmt)
+            
+            for search_encoded in unique_formats:
+                if data and len(data) > 1000:
+                    break  # Got valid data, stop trying formats
+                    
+                for base_url in BASE_URLS:
+                    url = "%s%s" % (base_url, SEARCH_LOC % (search_encoded))
                     if debug:
-                        print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
-                    if data and len(data) > 1000:  # Got valid data
-                        # Update BASE_URL for set_item calls
-                        global BASE_URL
-                        BASE_URL = base_url
-                        working_base_url = base_url
-                        break
-                    elif debug:
-                        print(f"[DEBUG 1337x] No valid data from {base_url}, trying next domain...")
-                except Exception as e:
-                    if debug:
-                        print(f"[DEBUG 1337x] Error with {base_url}: {e}")
-                    continue
+                        print(f"[DEBUG 1337x] Trying URL: {url}")
+                        print(f"[DEBUG 1337x] Search query: '{self.search_query}' -> encoded: '{search_encoded}'")
+                    try:
+                        # Use cloudscraper for 1337x to bypass Cloudflare protection
+                        test_data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+                        if debug:
+                            print(f"[DEBUG 1337x] Received {len(test_data)} bytes of HTML")
+                        if test_data and len(test_data) > 1000:  # Got valid data
+                            data = test_data
+                            # Update BASE_URL for set_item calls
+                            global BASE_URL
+                            BASE_URL = base_url
+                            working_base_url = base_url
+                            if debug:
+                                print(f"[DEBUG 1337x] Successfully got data with encoding: '{search_encoded}'")
+                            break
+                        elif debug:
+                            print(f"[DEBUG 1337x] No valid data from {base_url} with encoding '{search_encoded}', trying next...")
+                    except Exception as e:
+                        if debug:
+                            print(f"[DEBUG 1337x] Error with {base_url} and encoding '{search_encoded}': {e}")
+                        continue
+                
+                if data and len(data) > 1000:
+                    break  # Got valid data, stop trying other formats
             
             if not data or len(data) < 1000:
                 if debug:

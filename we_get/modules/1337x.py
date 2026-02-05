@@ -122,33 +122,38 @@ class leetx(object):
     def search(self):
         import os
         debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+        data = None
+        working_base_url = None
         
-        # Try multiple domains if first one fails
-        for base_url in BASE_URLS:
-            url = "%s%s" % (base_url, SEARCH_LOC % (quote_plus(self.search_query)))
-            if debug:
-                print(f"[DEBUG 1337x] Trying URL: {url}")
-            try:
-                # Use cloudscraper for 1337x to bypass Cloudflare protection
-                data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+        try:
+            # Try multiple domains if first one fails
+            for base_url in BASE_URLS:
+                url = "%s%s" % (base_url, SEARCH_LOC % (quote_plus(self.search_query)))
                 if debug:
-                    print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
-                if data and len(data) > 1000:  # Got valid data
-                    # Update BASE_URL for set_item calls
-                    global BASE_URL
-                    BASE_URL = base_url
-                    break
-                elif debug:
-                    print(f"[DEBUG 1337x] No valid data from {base_url}, trying next domain...")
-            except Exception as e:
+                    print(f"[DEBUG 1337x] Trying URL: {url}")
+                try:
+                    # Use cloudscraper for 1337x to bypass Cloudflare protection
+                    data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+                    if debug:
+                        print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
+                    if data and len(data) > 1000:  # Got valid data
+                        # Update BASE_URL for set_item calls
+                        global BASE_URL
+                        BASE_URL = base_url
+                        working_base_url = base_url
+                        break
+                    elif debug:
+                        print(f"[DEBUG 1337x] No valid data from {base_url}, trying next domain...")
+                except Exception as e:
+                    if debug:
+                        print(f"[DEBUG 1337x] Error with {base_url}: {e}")
+                    continue
+            
+            if not data or len(data) < 1000:
                 if debug:
-                    print(f"[DEBUG 1337x] Error with {base_url}: {e}")
-                continue
-        
-        if not data or len(data) < 1000:
-            if debug:
-                print("[DEBUG 1337x] No data received from any domain, returning empty results")
-            return self.items
+                    print("[DEBUG 1337x] No data received from any domain, returning empty results")
+                return self.items
+            
             # Try multiple patterns for finding torrent links
             # Pattern 1: Look for links in table rows (common 1337x structure)
             torrent_links = re.findall(r'<a[^>]+href=["\']([^"\']*torrent/[^"\']+)["\']', data, re.IGNORECASE)
@@ -174,8 +179,8 @@ class leetx(object):
                 # Normalize link
                 if link.startswith('http'):
                     # Full URL - extract path
-                    if BASE_URL in link:
-                        full_link = '/' + link.split(BASE_URL)[-1].lstrip('/')
+                    if working_base_url and working_base_url in link:
+                        full_link = '/' + link.split(working_base_url)[-1].lstrip('/')
                     else:
                         continue  # External link
                 elif link.startswith('/'):
@@ -218,10 +223,38 @@ class leetx(object):
     def list(self):
         import os
         debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
-        url = "%s%s" % (BASE_URL, LIST_LOC)
+        data = None
+        working_base_url = None
+        
         try:
-            # Use cloudscraper for 1337x to bypass Cloudflare protection
-            data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+            # Try multiple domains if first one fails
+            for base_url in BASE_URLS:
+                url = "%s%s" % (base_url, LIST_LOC)
+                if debug:
+                    print(f"[DEBUG 1337x] Trying URL: {url}")
+                try:
+                    # Use cloudscraper for 1337x to bypass Cloudflare protection
+                    data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+                    if debug:
+                        print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
+                    if data and len(data) > 1000:  # Got valid data
+                        # Update BASE_URL for set_item calls
+                        global BASE_URL
+                        BASE_URL = base_url
+                        working_base_url = base_url
+                        break
+                    elif debug:
+                        print(f"[DEBUG 1337x] No valid data from {base_url}, trying next domain...")
+                except Exception as e:
+                    if debug:
+                        print(f"[DEBUG 1337x] Error with {base_url}: {e}")
+                    continue
+            
+            if not data or len(data) < 1000:
+                if debug:
+                    print("[DEBUG 1337x] No data received from any domain, returning empty results")
+                return self.items
+            
             # Try multiple patterns for finding torrent links
             torrent_links = re.findall(r'href=[\'"]?([^\'">]*torrent/[^\'">]+)', data, re.IGNORECASE)
             if not torrent_links:
@@ -230,6 +263,9 @@ class leetx(object):
             else:
                 links = torrent_links
             
+            if debug:
+                print(f"[DEBUG 1337x] Found {len(links)} torrent links")
+            
             results = 0
             seen_links = set()
 
@@ -237,10 +273,14 @@ class leetx(object):
                 if results == self.results:
                     break
                 # Normalize link
-                if link.startswith('/'):
+                if link.startswith('http'):
+                    # Full URL - extract path
+                    if working_base_url and working_base_url in link:
+                        full_link = '/' + link.split(working_base_url)[-1].lstrip('/')
+                    else:
+                        continue  # External link
+                elif link.startswith('/'):
                     full_link = link
-                elif link.startswith('http'):
-                    continue
                 else:
                     full_link = '/' + link
                 
@@ -250,11 +290,19 @@ class leetx(object):
                 
                 if "/torrent/" in full_link:
                     try:
+                        if debug:
+                            print(f"[DEBUG 1337x] Processing torrent link: {full_link}")
                         item = self.set_item(full_link)
                         if item:
+                            if debug:
+                                print(f"[DEBUG 1337x] Successfully extracted item: {list(item.keys())[0] if item else 'None'}")
                             self.items.update(item)
                             results += 1
-                    except Exception:
+                        elif debug:
+                            print(f"[DEBUG 1337x] Failed to extract item from {full_link}")
+                    except Exception as e:
+                        if debug:
+                            print(f"[DEBUG 1337x] Error processing {full_link}: {e}")
                         continue
         except (requests.exceptions.Timeout,
                 requests.exceptions.ConnectionError,

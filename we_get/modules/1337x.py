@@ -16,7 +16,12 @@ BASE_URLS = [
     "https://www.1377x.to"
 ]
 BASE_URL = BASE_URLS[0]  # Default to first one
-SEARCH_LOC = "/search/%s/1/"
+# 1337x search can use different formats - try multiple
+SEARCH_LOCS = [
+    "/search/%s/1/",  # Original format
+    "/search/%s/",    # Without page number
+    "/search?q=%s",   # Query parameter format
+]
 LIST_LOC = "/top-100"
 
 
@@ -151,35 +156,65 @@ class leetx(object):
             for search_encoded in unique_formats:
                 if data and len(data) > 1000:
                     break  # Got valid data, stop trying formats
+                
+                # Try different search URL formats
+                for search_loc in SEARCH_LOCS:
+                    if data and len(data) > 1000:
+                        break  # Got valid data, stop trying URL formats
                     
-                for base_url in BASE_URLS:
-                    url = "%s%s" % (base_url, SEARCH_LOC % (search_encoded))
-                    if debug:
-                        print(f"[DEBUG 1337x] Trying URL: {url}")
-                        print(f"[DEBUG 1337x] Search query: '{self.search_query}' -> encoded: '{search_encoded}'")
-                    try:
-                        # Use cloudscraper for 1337x to bypass Cloudflare protection
-                        test_data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
+                    for base_url in BASE_URLS:
+                        url = "%s%s" % (base_url, search_loc % (search_encoded))
                         if debug:
-                            print(f"[DEBUG 1337x] Received {len(test_data)} bytes of HTML")
-                        if test_data and len(test_data) > 1000:  # Got valid data
-                            data = test_data
-                            # Update BASE_URL for set_item calls
-                            global BASE_URL
-                            BASE_URL = base_url
-                            working_base_url = base_url
+                            print(f"[DEBUG 1337x] Trying URL: {url}")
+                            print(f"[DEBUG 1337x] Search query: '{self.search_query}' -> encoded: '{search_encoded}'")
+                        try:
+                            # Use cloudscraper for 1337x to bypass Cloudflare protection
+                            test_data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
                             if debug:
-                                print(f"[DEBUG 1337x] Successfully got data with encoding: '{search_encoded}'")
-                            break
-                        elif debug:
-                            print(f"[DEBUG 1337x] No valid data from {base_url} with encoding '{search_encoded}', trying next...")
-                    except Exception as e:
-                        if debug:
-                            print(f"[DEBUG 1337x] Error with {base_url} and encoding '{search_encoded}': {e}")
-                        continue
+                                print(f"[DEBUG 1337x] Received {len(test_data)} bytes of HTML")
+                            if test_data and len(test_data) > 1000:  # Got valid data
+                                # Check if this looks like actual search results, not top torrents
+                                # Search results pages usually contain the search query in the page
+                                # But ignore common stop words that sites often filter out
+                                search_query_lower = self.search_query.lower()
+                                page_lower = test_data.lower()
+                                
+                                # Common stop words that search engines typically ignore
+                                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+                                query_words = [w for w in search_query_lower.split() if w not in stop_words]
+                                
+                                # If all words are stop words, use original query
+                                if not query_words:
+                                    query_words = search_query_lower.split()
+                                
+                                # Check if important words appear in page
+                                matches = sum(1 for word in query_words if word in page_lower)
+                                
+                                # Require at least one important word to match, or if only stop words, require at least one stop word
+                                if matches > 0 and matches >= max(1, len(query_words) * 0.5):
+                                    data = test_data
+                                    # Update BASE_URL for set_item calls
+                                    global BASE_URL
+                                    BASE_URL = base_url
+                                    working_base_url = base_url
+                                    if debug:
+                                        print(f"[DEBUG 1337x] Successfully got search results with encoding: '{search_encoded}' and URL format: '{search_loc}'")
+                                        print(f"[DEBUG 1337x] Validation: {matches}/{len(query_words)} important words found in page")
+                                    break
+                                elif debug:
+                                    print(f"[DEBUG 1337x] Page doesn't seem to contain search results (only {matches}/{len(query_words)} important words found), might be top torrents page")
+                            elif debug:
+                                print(f"[DEBUG 1337x] No valid data from {base_url} with encoding '{search_encoded}', trying next...")
+                        except Exception as e:
+                            if debug:
+                                print(f"[DEBUG 1337x] Error with {base_url} and encoding '{search_encoded}': {e}")
+                            continue
+                    
+                    if data and len(data) > 1000:
+                        break  # Got valid data, stop trying other URL formats
                 
                 if data and len(data) > 1000:
-                    break  # Got valid data, stop trying other formats
+                    break  # Got valid data, stop trying other encodings
             
             if not data or len(data) < 1000:
                 if debug:

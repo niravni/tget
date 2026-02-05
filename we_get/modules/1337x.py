@@ -42,7 +42,10 @@ class leetx(object):
         item = dict()
         
         try:
-            data = self.module.http_get_request(url)
+            import os
+            debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+            # Use cloudscraper for 1337x to bypass Cloudflare protection
+            data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
             # Try multiple patterns for magnet links
             # Pattern 1: Standard href with magnet
             magnet_links = re.findall(r'href=[\'"]?(magnet:[^\'">]+)', data, re.IGNORECASE)
@@ -117,7 +120,8 @@ class leetx(object):
         if debug:
             print(f"[DEBUG 1337x] Search URL: {url}")
         try:
-            data = self.module.http_get_request(url, debug=debug)
+            # Use cloudscraper for 1337x to bypass Cloudflare protection
+            data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
             if debug:
                 print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
             if not data:
@@ -191,9 +195,12 @@ class leetx(object):
         return self.items
 
     def list(self):
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
         url = "%s%s" % (BASE_URL, LIST_LOC)
         try:
-            data = self.module.http_get_request(url)
+            # Use cloudscraper for 1337x to bypass Cloudflare protection
+            data = self.module.http_get_request(url, debug=debug, use_cloudscraper=True)
             # Try multiple patterns for finding torrent links
             torrent_links = re.findall(r'href=[\'"]?([^\'">]*torrent/[^\'">]+)', data, re.IGNORECASE)
             if not torrent_links:

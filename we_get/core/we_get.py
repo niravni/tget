@@ -174,6 +174,10 @@ class WGSelect(object):
                 items = run.main(self.pargs)
                 items = self.add_items_label(target, items)
                 if items:
+                    import os
+                    debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+                    if debug:
+                        print(f"[DEBUG] Module '{target}' returned {len(items)} items")
                     self.items.update(items)
                 else:
                     msg_error(" '%s' - no results" % (target), False)
@@ -187,15 +191,25 @@ class WGSelect(object):
                 msg_error("Module: '%s.py' %s: %s!" % (target, type(err).__name__, err), False)
 
         """Sort self.items"""
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+        if debug:
+            print(f"[DEBUG] Total items before filtering/sorting: {len(self.items)}")
         if self.filter:
             self.items = self.filter_items(self.filter)
+            if debug:
+                print(f"[DEBUG] Items after filter '{self.filter}': {len(self.items)}")
         if self.sort_type == "name":
             self.items = self.sort_items_by_name(self.items)
         else:
             self.items = self.sort_items_by_seeds(self.items)
         # items cut must at the end of item processing.
         if self.results:
+            if debug:
+                print(f"[DEBUG] Cutting results to {self.results} items")
             self.items = self.cut_items(self.items, self.results)
+        if debug:
+            print(f"[DEBUG] Final items to display: {len(self.items)}")
 
         if api_mode:
             return self.items

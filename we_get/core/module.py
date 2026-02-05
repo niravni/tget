@@ -9,6 +9,13 @@ import socket
 
 import requests
 
+# Try to import cloudscraper for Cloudflare bypass (optional)
+try:
+    import cloudscraper
+    HAS_CLOUDSCRAPER = True
+except ImportError:
+    HAS_CLOUDSCRAPER = False
+
 from we_get.core.utils import random_user_agent
 
 # Modern user agents - always use these instead of old ones from the file
@@ -29,45 +36,79 @@ class Module(object):
     def __init__(self):
         self.cursor = None
 
-    def http_get_request(self, url, timeout=10, debug=False):
+    def http_get_request(self, url, timeout=10, debug=False, use_cloudscraper=False):
         """http_request: create HTTP request.
         @url: URL to request
         @timeout: Request timeout in seconds (default: 10)
         @debug: Enable debug output
+        @use_cloudscraper: Use cloudscraper to bypass Cloudflare (if available)
         @return: data.
         """
         import os
         debug = debug or os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
         
-        # Use more realistic browser headers to avoid blocking
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Cache-Control": "max-age=0"
-        }
-        try:
+        # Use cloudscraper if requested and available (for Cloudflare protection)
+        res = None
+        if use_cloudscraper and HAS_CLOUDSCRAPER:
+            if debug:
+                print(f"[DEBUG] Using cloudscraper to bypass Cloudflare")
+            scraper = cloudscraper.create_scraper()
+            try:
+                if debug:
+                    print(f"[DEBUG] Requesting URL: {url}")
+                res = scraper.get(url, timeout=timeout, allow_redirects=True)
+            except Exception as err:
+                if debug:
+                    print(f"[DEBUG] cloudscraper failed, falling back to requests: {err}")
+                res = None  # Force fallback to requests
+        
+        # Use regular requests if cloudscraper not used, not available, or failed
+        if res is None:
+            # Use more realistic browser headers to avoid blocking
+            headers = {
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Referer": "https://www.google.com/",
+                "DNT": "1"
+            }
             if debug:
                 print(f"[DEBUG] Requesting URL: {url}")
                 print(f"[DEBUG] User-Agent: {USER_AGENT[:50]}...")
             res = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        
+        # Process response (works for both cloudscraper and requests)
+        try:
             if debug:
                 print(f"[DEBUG] Status Code: {res.status_code}")
-                print(f"[DEBUG] Response Length: {len(res.text)} bytes")
+                print(f"[DEBUG] Response Length: {len(res.content)} bytes (raw), {len(res.text)} bytes (decoded)")
                 print(f"[DEBUG] Final URL (after redirects): {res.url}")
+                print(f"[DEBUG] Content-Type: {res.headers.get('Content-Type', 'N/A')}")
+                print(f"[DEBUG] Content-Encoding: {res.headers.get('Content-Encoding', 'N/A')}")
+                if 'cf-ray' in res.headers:
+                    print(f"[DEBUG] Cloudflare detected (CF-Ray: {res.headers.get('cf-ray')})")
             
             # Check if we got blocked or got an error page
             if res.status_code == 403:
                 if debug:
                     print(f"[DEBUG] 403 Forbidden - Site is blocking the request")
-                    print(f"[DEBUG] Response preview: {res.text[:500]}")
-                # Try with a different approach - maybe the site needs different headers
+                    # Check if it's a Cloudflare challenge
+                    response_lower = res.text.lower() if res.text else ""
+                    if 'cloudflare' in response_lower or 'cf-ray' in res.headers or 'challenge' in response_lower:
+                        print(f"[DEBUG] Cloudflare protection detected - requires JavaScript execution")
+                    # Show first 500 chars of decoded text
+                    try:
+                        if res.text and len(res.text) > 0:
+                            preview = res.text[:500]
+                            print(f"[DEBUG] Response preview (text): {preview}")
+                        else:
+                            print(f"[DEBUG] Response is binary/compressed, cannot preview as text")
+                            print(f"[DEBUG] First 100 bytes (hex): {res.content[:100].hex()}")
+                    except Exception as e:
+                        print(f"[DEBUG] Error reading response: {e}")
                 return ""
             elif res.status_code != 200:
                 if debug:

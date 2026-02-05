@@ -11,16 +11,18 @@ import requests
 
 from we_get.core.utils import random_user_agent
 
-# Fallback modern user agent if random one is too old
-MODERN_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# Modern user agents - always use these instead of old ones from the file
+MODERN_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
+]
 
-try:
-    USER_AGENT = random_user_agent()
-    # If user agent is too old (contains Firefox/1 or Firefox/2), use modern one
-    if "Firefox/1" in USER_AGENT or "Firefox/2" in USER_AGENT:
-        USER_AGENT = MODERN_USER_AGENT
-except:
-    USER_AGENT = MODERN_USER_AGENT
+# Always use modern user agent - the old ones in useragents.txt are too outdated
+from random import choice
+USER_AGENT = choice(MODERN_USER_AGENTS)
 
 
 class Module(object):
@@ -61,7 +63,13 @@ class Module(object):
                 print(f"[DEBUG] Final URL (after redirects): {res.url}")
             
             # Check if we got blocked or got an error page
-            if res.status_code != 200:
+            if res.status_code == 403:
+                if debug:
+                    print(f"[DEBUG] 403 Forbidden - Site is blocking the request")
+                    print(f"[DEBUG] Response preview: {res.text[:500]}")
+                # Try with a different approach - maybe the site needs different headers
+                return ""
+            elif res.status_code != 200:
                 if debug:
                     print(f"[DEBUG] Non-200 status code: {res.status_code}")
                 return ""

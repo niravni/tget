@@ -41,6 +41,8 @@ class yts(object):
                 self.genre = self.pargs[opt][0]
 
     def search(self):
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
         # YTS API format: quality and genre need proper formatting
         quality_param = "&quality=%s" % self.quality if self.quality != "720p" else ""
         genre_param = "&genre=%s" % self.genre if self.genre != "all" else ""
@@ -50,12 +52,26 @@ class yts(object):
             quality_param,
             genre_param
         )
+        if debug:
+            print(f"[DEBUG YTS] Search URL: {url}")
         try:
-            response = self.module.http_get_request(url)
+            response = self.module.http_get_request(url, debug=debug)
+            if debug:
+                print(f"[DEBUG YTS] Received {len(response)} bytes of JSON")
+            if not response:
+                if debug:
+                    print("[DEBUG YTS] No data received, returning empty results")
+                return self.items
             data = json.loads(response)
+            if debug:
+                print(f"[DEBUG YTS] JSON parsed successfully")
+                print(f"[DEBUG YTS] Status: {data.get('status', 'N/A')}")
+                print(f"[DEBUG YTS] Status message: {data.get('status_message', 'N/A')}")
             
             # Check if API returned an error
             if data.get('status') != 'ok' and data.get('status') != None:
+                if debug:
+                    print(f"[DEBUG YTS] API returned error status: {data.get('status')}")
                 return self.items
             
             # Try to get movies from response
@@ -64,11 +80,16 @@ class yts(object):
                 # Sometimes movies is directly in data
                 movies = data.get('movies', [])
             
+            if debug:
+                print(f"[DEBUG YTS] Found {len(movies)} movies in response")
+            
             for movie in movies:
                 if not movie:
                     continue
                 torrents = movie.get('torrents', [])
                 if not torrents or len(torrents) == 0:
+                    if debug:
+                        print(f"[DEBUG YTS] Movie '{movie.get('title', 'Unknown')}' has no torrents")
                     continue
                 # Use the first torrent or find the best one
                 torrent = torrents[0]
@@ -81,10 +102,16 @@ class yts(object):
                     hash_val = torrent.get('hash', '')
                     if hash_val:
                         link = f"magnet:?xt=urn:btih:{hash_val}&dn={quote_plus(name)}"
+                        if debug:
+                            print(f"[DEBUG YTS] Built magnet link from hash for: {name}")
                 if link:
+                    if debug:
+                        print(f"[DEBUG YTS] Added movie: {name} (seeds: {seeds}, leeches: {leeches})")
                     self.items.update({
                         name: {'seeds': seeds, 'leeches': leeches, 'link': link}
                     })
+                elif debug:
+                    print(f"[DEBUG YTS] No link found for movie: {name}")
         except (json.decoder.JSONDecodeError, KeyError, IndexError, TypeError):
             return self.items
         except (requests.exceptions.ConnectionError,

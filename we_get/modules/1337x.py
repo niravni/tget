@@ -111,9 +111,19 @@ class leetx(object):
         return item
 
     def search(self):
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
         url = "%s%s" % (BASE_URL, SEARCH_LOC % (quote_plus(self.search_query)))
+        if debug:
+            print(f"[DEBUG 1337x] Search URL: {url}")
         try:
-            data = self.module.http_get_request(url)
+            data = self.module.http_get_request(url, debug=debug)
+            if debug:
+                print(f"[DEBUG 1337x] Received {len(data)} bytes of HTML")
+            if not data:
+                if debug:
+                    print("[DEBUG 1337x] No data received, returning empty results")
+                return self.items
             # Try multiple patterns for finding torrent links
             # Pattern 1: Look for links in table rows (common 1337x structure)
             torrent_links = re.findall(r'<a[^>]+href=["\']([^"\']*torrent/[^"\']+)["\']', data, re.IGNORECASE)
@@ -126,6 +136,9 @@ class leetx(object):
             if not torrent_links:
                 all_links = re.findall(r'href=["\']?([^"\'>]+)', data)
                 torrent_links = [link for link in all_links if "/torrent/" in link.lower()]
+            
+            if debug:
+                print(f"[DEBUG 1337x] Found {len(torrent_links)} torrent links")
             
             results = 0
             seen_links = set()  # Avoid duplicate processing
@@ -152,11 +165,19 @@ class leetx(object):
                 
                 if "/torrent/" in full_link:
                     try:
+                        if debug:
+                            print(f"[DEBUG 1337x] Processing torrent link: {full_link}")
                         item = self.set_item(full_link)
                         if item:
+                            if debug:
+                                print(f"[DEBUG 1337x] Successfully extracted item: {list(item.keys())[0] if item else 'None'}")
                             self.items.update(item)
                             results += 1
-                    except Exception:
+                        elif debug:
+                            print(f"[DEBUG 1337x] Failed to extract item from {full_link}")
+                    except Exception as e:
+                        if debug:
+                            print(f"[DEBUG 1337x] Error processing {full_link}: {e}")
                         # Skip this item and continue
                         continue
         except (requests.exceptions.Timeout,

@@ -27,12 +27,16 @@ class Module(object):
     def __init__(self):
         self.cursor = None
 
-    def http_get_request(self, url, timeout=10):
+    def http_get_request(self, url, timeout=10, debug=False):
         """http_request: create HTTP request.
         @url: URL to request
         @timeout: Request timeout in seconds (default: 10)
+        @debug: Enable debug output
         @return: data.
         """
+        import os
+        debug = debug or os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+        
         # Use more realistic browser headers to avoid blocking
         headers = {
             "User-Agent": USER_AGENT,
@@ -47,17 +51,35 @@ class Module(object):
             "Cache-Control": "max-age=0"
         }
         try:
+            if debug:
+                print(f"[DEBUG] Requesting URL: {url}")
+                print(f"[DEBUG] User-Agent: {USER_AGENT[:50]}...")
             res = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            if debug:
+                print(f"[DEBUG] Status Code: {res.status_code}")
+                print(f"[DEBUG] Response Length: {len(res.text)} bytes")
+                print(f"[DEBUG] Final URL (after redirects): {res.url}")
+            
             # Check if we got blocked or got an error page
             if res.status_code != 200:
+                if debug:
+                    print(f"[DEBUG] Non-200 status code: {res.status_code}")
                 return ""
             # Check if response is too short (likely an error page or block)
             if len(res.text) < 100:
+                if debug:
+                    print(f"[DEBUG] Response too short ({len(res.text)} bytes), likely error page")
                 return ""
             # Check for common blocking/error indicators
             text_lower = res.text.lower()
-            if any(indicator in text_lower for indicator in ['access denied', 'blocked', 'cloudflare', 'captcha', 'forbidden']):
+            blocking_indicators = ['access denied', 'blocked', 'cloudflare', 'captcha', 'forbidden']
+            found_indicators = [ind for ind in blocking_indicators if ind in text_lower]
+            if found_indicators:
+                if debug:
+                    print(f"[DEBUG] Blocking indicators found: {found_indicators}")
                 return ""
+            if debug:
+                print(f"[DEBUG] Successfully received {len(res.text)} bytes of data")
             return res.text
         except requests.exceptions.Timeout:
             print("Error: Timeout when opening following url: {}".format(url))

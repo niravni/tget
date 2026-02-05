@@ -175,46 +175,14 @@ class leetx(object):
                             if debug:
                                 print(f"[DEBUG 1337x] Received {len(test_data)} bytes of HTML")
                             if test_data and len(test_data) > 1000:  # Got valid data
-                                # Check if this looks like actual search results, not top torrents
-                                # Validate by checking if torrent links/titles contain the search query
-                                search_query_lower = self.search_query.lower()
-                                
-                                # Common stop words that search engines typically ignore
-                                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-                                query_words = [w for w in search_query_lower.split() if w not in stop_words]
-                                
-                                # If all words are stop words, use original query
-                                if not query_words:
-                                    query_words = search_query_lower.split()
-                                
-                                # Extract torrent links from the page to validate
-                                test_torrent_links = re.findall(r'href=["\']([^"\']*torrent/[^"\']+)["\']', test_data, re.IGNORECASE)
-                                if not test_torrent_links:
-                                    test_torrent_links = re.findall(r'href=["\']([^"\']*torrent/[^"\']+)["\']', test_data, re.IGNORECASE)
-                                
-                                # Check if any torrent links contain the important search words
-                                matching_links = 0
-                                for link in test_torrent_links[:10]:  # Check first 10 links
-                                    link_lower = link.lower()
-                                    # Check if important words appear in the link/title
-                                    link_matches = sum(1 for word in query_words if word in link_lower)
-                                    if link_matches > 0:
-                                        matching_links += 1
-                                
-                                # Require at least 30% of checked links to contain search terms
-                                # This ensures we have actual search results, not random top torrents
-                                if len(test_torrent_links) > 0 and matching_links >= max(1, len(test_torrent_links[:10]) * 0.3):
-                                    data = test_data
-                                    # Update BASE_URL for set_item calls
-                                    global BASE_URL
-                                    BASE_URL = base_url
-                                    working_base_url = base_url
-                                    if debug:
-                                        print(f"[DEBUG 1337x] Successfully got search results with encoding: '{search_encoded}' and URL format: '{search_loc}'")
-                                        print(f"[DEBUG 1337x] Validation: {matching_links}/{len(test_torrent_links[:10])} torrent links contain search terms")
-                                    break
-                                elif debug:
-                                    print(f"[DEBUG 1337x] Page doesn't seem to contain search results ({matching_links}/{len(test_torrent_links[:10])} links match), might be top torrents or no results page")
+                                data = test_data
+                                # Update BASE_URL for set_item calls
+                                global BASE_URL
+                                BASE_URL = base_url
+                                working_base_url = base_url
+                                if debug:
+                                    print(f"[DEBUG 1337x] Successfully got data with encoding: '{search_encoded}' and URL format: '{search_loc}'")
+                                break
                             elif debug:
                                 print(f"[DEBUG 1337x] No valid data from {base_url} with encoding '{search_encoded}', trying next...")
                         except Exception as e:

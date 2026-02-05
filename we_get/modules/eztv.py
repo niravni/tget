@@ -35,6 +35,12 @@ class eztv(object):
                 self.action = "list"
 
     def _parse_data(self, data):
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
+        
+        if debug:
+            print(f"[DEBUG EZTV] Starting to parse {len(data)} bytes of HTML")
+        
         # Clean up data
         data = data.replace('\t', '').replace('\n', '')
         
@@ -46,6 +52,9 @@ class eztv(object):
             re.IGNORECASE | re.DOTALL
         )
         
+        if debug:
+            print(f"[DEBUG EZTV] Pattern 1 found {len(items)} items")
+        
         # Pattern 2: Alternative row patterns
         if not items:
             items = re.findall(
@@ -53,6 +62,8 @@ class eztv(object):
                 data,
                 re.IGNORECASE | re.DOTALL
             )
+            if debug:
+                print(f"[DEBUG EZTV] Pattern 2 found {len(items)} items")
         
         # Pattern 3: Generic table rows with magnet links
         if not items:
@@ -61,10 +72,55 @@ class eztv(object):
                 data,
                 re.IGNORECASE | re.DOTALL
             )
-
+            if debug:
+                print(f"[DEBUG EZTV] Pattern 3 found {len(items)} items")
+        
+        # Pattern 4: Look for any table rows
+        if not items:
+            items = re.findall(
+                r'<tr[^>]*>(.*?)</tr>',
+                data,
+                re.IGNORECASE | re.DOTALL
+            )
+            if debug:
+                print(f"[DEBUG EZTV] Pattern 4 (any table row) found {len(items)} items")
+        
+        # Pattern 5: Look for magnet links anywhere in the data
+        if not items:
+            magnet_links = re.findall(r'(magnet:\?[^\'"\s<>]+)', data, re.IGNORECASE)
+            if debug:
+                print(f"[DEBUG EZTV] Pattern 5 (direct magnet links) found {len(magnet_links)} magnet links")
+            # Create dummy items from magnet links
+            if magnet_links:
+                items = [f"magnet_link:{link}" for link in magnet_links[:50]]  # Limit to 50
+        
+        if debug:
+            print(f"[DEBUG EZTV] Total items to process: {len(items)}")
+        
+        items_with_magnet = 0
         for item in items:
+            # Handle dummy items from Pattern 5
+            if item.startswith("magnet_link:"):
+                magnet = item.replace("magnet_link:", "")
+                try:
+                    name = self.module.fix_name(self.module.magnet2name(magnet))
+                    self.items.update({
+                        name: {'seeds': '0', 'leeches': '?', 'link': magnet}
+                    })
+                    items_with_magnet += 1
+                    if debug:
+                        print(f"[DEBUG EZTV] Added item from direct magnet: {name[:50]}...")
+                except Exception as e:
+                    if debug:
+                        print(f"[DEBUG EZTV] Failed to parse magnet link: {e}")
+                continue
+            
             if "magnet:" not in item:
                 continue
+            
+            items_with_magnet += 1
+            if debug and items_with_magnet <= 3:
+                print(f"[DEBUG EZTV] Processing item {items_with_magnet} (first 200 chars): {item[:200]}")
                 
             try:
                 # Try to find seeds - multiple patterns
@@ -108,7 +164,11 @@ class eztv(object):
                     self.items.update({
                         name: {'seeds': seeds, 'leeches': leeches, 'link': magnet}
                     })
-                except (IndexError, AttributeError, ValueError):
+                    if debug:
+                        print(f"[DEBUG EZTV] Successfully added item: {name[:50]}...")
+                except (IndexError, AttributeError, ValueError) as e:
+                    if debug:
+                        print(f"[DEBUG EZTV] Magnet parsing failed, trying title extraction: {e}")
                     # If parsing fails, try to extract name from item text
                     try:
                         title_match = re.findall(r'<a[^>]*>(.*?)</a>', item, re.IGNORECASE | re.DOTALL)
@@ -117,16 +177,36 @@ class eztv(object):
                             self.items.update({
                                 name: {'seeds': seeds, 'leeches': leeches, 'link': magnet}
                             })
-                    except Exception:
+                            if debug:
+                                print(f"[DEBUG EZTV] Added item from title: {name[:50]}...")
+                    except Exception as e2:
+                        if debug:
+                            print(f"[DEBUG EZTV] Title extraction also failed: {e2}")
                         pass
-            except Exception:
+            except Exception as e:
+                if debug:
+                    print(f"[DEBUG EZTV] Error processing item: {e}")
                 # Skip this item and continue
                 continue
+        
+        if debug:
+            print(f"[DEBUG EZTV] Items with magnet links found: {items_with_magnet}")
+            print(f"[DEBUG EZTV] Total items added: {len(self.items)}")
 
     def search(self):
+        import os
+        debug = os.environ.get('TGET_DEBUG', '').lower() in ('1', 'true', 'yes')
         url = "%s%s" % (BASE_URL, SEARCH_LOC % (self.search_query))
+        if debug:
+            print(f"[DEBUG EZTV] Search URL: {url}")
         try:
-            data = self.module.http_get_request(url, timeout=10)
+            data = self.module.http_get_request(url, timeout=10, debug=debug)
+            if debug:
+                print(f"[DEBUG EZTV] Received {len(data)} bytes of data")
+            if not data:
+                if debug:
+                    print("[DEBUG EZTV] No data received")
+                return self.items
             self._parse_data(data)
         except (requests.exceptions.Timeout,
                 requests.exceptions.ConnectionError,

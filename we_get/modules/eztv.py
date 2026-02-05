@@ -278,7 +278,13 @@ class eztv(object):
                 continue
             
             # Extract magnet links from select options in this item
+            if debug:
+                print(f"[DEBUG EZTV] Processing item {items_with_magnet+1}, checking for select options...")
             select_options_in_item = re.findall(r'<option[^>]*value=["\']([^"\']+)["\']', item, re.IGNORECASE)
+            if debug:
+                print(f"[DEBUG EZTV] Found {len(select_options_in_item)} select options in item")
+                if select_options_in_item and len(select_options_in_item) > 0:
+                    print(f"[DEBUG EZTV] First option value (first 150 chars): {select_options_in_item[0][:150]}")
             for opt_val in select_options_in_item:
                 if 'magnet:' in opt_val.lower():
                     # Found magnet link in select option
@@ -298,8 +304,38 @@ class eztv(object):
                             print(f"[DEBUG EZTV] Failed to parse magnet from select: {e}")
                     continue  # Skip to next item
             
-            # Look for episode/show links in this item
+            # Look for any links in this item that might lead to episode/show pages
+            # Try multiple patterns for episode/show links
             ep_links_in_item = re.findall(r'href=["\']([^"\']*(?:ep/|episode|shows/)[^"\']+)["\']', item, re.IGNORECASE)
+            if not ep_links_in_item:
+                # Look for any href links that might be episode/show pages
+                all_links_in_item = re.findall(r'href=["\']([^"\']+)["\']', item, re.IGNORECASE)
+                if debug:
+                    print(f"[DEBUG EZTV] Found {len(all_links_in_item)} total links in item")
+                    if all_links_in_item:
+                        print(f"[DEBUG EZTV] Sample links: {all_links_in_item[:3]}")
+                # Filter for links that look like episode/show pages
+                ep_links_in_item = [link for link in all_links_in_item if any(x in link.lower() for x in ['ep/', 'episode', 'shows/', 'show/', 'tv/', '/shows/'])]
+                # Also look for links that are not external and not common paths
+                if not ep_links_in_item:
+                    # Try to find any internal links that might be show pages
+                    internal_links = [link for link in all_links_in_item 
+                                     if link.startswith('/') and 
+                                     not link.startswith('/search') and 
+                                     not link.startswith('/static') and
+                                     not link.startswith('/css') and
+                                     not link.startswith('/js') and
+                                     len(link) > 3]
+                    if internal_links:
+                        ep_links_in_item = internal_links[:3]  # Try first 3 internal links
+                        if debug:
+                            print(f"[DEBUG EZTV] Using {len(ep_links_in_item)} internal links as potential show pages")
+            
+            if debug:
+                print(f"[DEBUG EZTV] Found {len(ep_links_in_item)} potential episode/show links in item")
+                if ep_links_in_item:
+                    print(f"[DEBUG EZTV] Sample episode/show link: {ep_links_in_item[0][:100]}")
+            
             if ep_links_in_item:
                 # Try to fetch episode page to get magnet link
                 for ep_link in ep_links_in_item[:1]:  # Just try first one

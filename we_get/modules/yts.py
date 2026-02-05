@@ -7,6 +7,7 @@ from we_get.core.module import Module
 import json
 import requests
 import socket
+from urllib.parse import quote_plus
 
 BASE_URL = "https://yts.bz"
 
@@ -31,7 +32,6 @@ class yts(object):
             if opt == "--search":
                 self.action = "search"
                 # YTS API expects URL-encoded query, not dash-separated
-                from urllib.parse import quote_plus
                 self.search_query = quote_plus(self.pargs[opt][0])
             elif opt == "--list":
                 self.action = "list"
@@ -53,22 +53,39 @@ class yts(object):
         try:
             response = self.module.http_get_request(url)
             data = json.loads(response)
-            try:
-                api = data['data']['movies']
-            except KeyError:
+            
+            # Check if API returned an error
+            if data.get('status') != 'ok' and data.get('status') != None:
                 return self.items
-            for movie in api:
-                if not movie.get('torrents') or len(movie['torrents']) == 0:
+            
+            # Try to get movies from response
+            movies = data.get('data', {}).get('movies', [])
+            if not movies:
+                # Sometimes movies is directly in data
+                movies = data.get('movies', [])
+            
+            for movie in movies:
+                if not movie:
                     continue
-                name = self.module.fix_name(movie['title'])
-                seeds = movie['torrents'][0].get('seeds', '0')
-                leeches = movie['torrents'][0].get('peers', '0')
-                link = movie['torrents'][0].get('url', '')
+                torrents = movie.get('torrents', [])
+                if not torrents or len(torrents) == 0:
+                    continue
+                # Use the first torrent or find the best one
+                torrent = torrents[0]
+                name = self.module.fix_name(movie.get('title', movie.get('title_english', 'Unknown')))
+                seeds = str(torrent.get('seeds', '0'))
+                leeches = str(torrent.get('peers', '0'))
+                link = torrent.get('url', '')
+                if not link:
+                    # Try hash to build magnet link
+                    hash_val = torrent.get('hash', '')
+                    if hash_val:
+                        link = f"magnet:?xt=urn:btih:{hash_val}&dn={quote_plus(name)}"
                 if link:
                     self.items.update({
-                        name: {'seeds': str(seeds), 'leeches': str(leeches), 'link': link}
+                        name: {'seeds': seeds, 'leeches': leeches, 'link': link}
                     })
-        except (json.decoder.JSONDecodeError, KeyError, IndexError):
+        except (json.decoder.JSONDecodeError, KeyError, IndexError, TypeError):
             return self.items
         except (requests.exceptions.ConnectionError,
                 requests.exceptions.RequestException,
@@ -90,21 +107,38 @@ class yts(object):
         try:
             response = self.module.http_get_request(url)
             data = json.loads(response)
-            try:
-                api = data['data']['movies']
-            except KeyError:
+            
+            # Check if API returned an error
+            if data.get('status') != 'ok' and data.get('status') != None:
                 return self.items
-            for movie in api:
-                if not movie.get('torrents') or len(movie['torrents']) == 0:
+            
+            # Try to get movies from response
+            movies = data.get('data', {}).get('movies', [])
+            if not movies:
+                # Sometimes movies is directly in data
+                movies = data.get('movies', [])
+            
+            for movie in movies:
+                if not movie:
                     continue
-                torrent_name = self.module.fix_name(movie['title'])
-                seeds = movie['torrents'][0].get('seeds', '0')
-                leeches = movie['torrents'][0].get('peers', '0')
-                link = movie['torrents'][0].get('url', '')
+                torrents = movie.get('torrents', [])
+                if not torrents or len(torrents) == 0:
+                    continue
+                # Use the first torrent or find the best one
+                torrent = torrents[0]
+                torrent_name = self.module.fix_name(movie.get('title', movie.get('title_english', 'Unknown')))
+                seeds = str(torrent.get('seeds', '0'))
+                leeches = str(torrent.get('peers', '0'))
+                link = torrent.get('url', '')
+                if not link:
+                    # Try hash to build magnet link
+                    hash_val = torrent.get('hash', '')
+                    if hash_val:
+                        link = f"magnet:?xt=urn:btih:{hash_val}&dn={quote_plus(torrent_name)}"
                 if link:
-                    self.items.update({torrent_name: {'leeches': str(leeches),
-                                                      'seeds': str(seeds), 'link': link}})
-        except (json.decoder.JSONDecodeError, KeyError, IndexError):
+                    self.items.update({torrent_name: {'leeches': leeches,
+                                                      'seeds': seeds, 'link': link}})
+        except (json.decoder.JSONDecodeError, KeyError, IndexError, TypeError):
             return self.items
         except (requests.exceptions.ConnectionError,
                 requests.exceptions.RequestException,

@@ -115,30 +115,33 @@ class leetx(object):
         try:
             data = self.module.http_get_request(url)
             # Try multiple patterns for finding torrent links
-            # Pattern 1: Standard href links
-            links = re.findall(r'href=[\'"]?([^\'">]+)', data)
-            # Pattern 2: More specific torrent page links
-            torrent_links = re.findall(r'href=[\'"]?([^\'">]*torrent/[^\'">]+)', data, re.IGNORECASE)
+            # Pattern 1: Look for links in table rows (common 1337x structure)
+            torrent_links = re.findall(r'<a[^>]+href=["\']([^"\']*torrent/[^"\']+)["\']', data, re.IGNORECASE)
             
-            # Use the more specific pattern if available, otherwise fall back to general
-            if torrent_links:
-                links = torrent_links
-            else:
-                # Filter to only torrent links
-                links = [link for link in links if "/torrent/" in link]
+            # Pattern 2: More generic torrent links
+            if not torrent_links:
+                torrent_links = re.findall(r'href=["\']([^"\']*torrent/[^"\']+)["\']', data, re.IGNORECASE)
+            
+            # Pattern 3: Any href with /torrent/ in it
+            if not torrent_links:
+                all_links = re.findall(r'href=["\']?([^"\'>]+)', data)
+                torrent_links = [link for link in all_links if "/torrent/" in link.lower()]
             
             results = 0
             seen_links = set()  # Avoid duplicate processing
 
-            for link in links:
+            for link in torrent_links:
                 if results == self.results:
                     break
-                # Normalize link (remove leading slash if BASE_URL already has it)
-                if link.startswith('/'):
+                # Normalize link
+                if link.startswith('http'):
+                    # Full URL - extract path
+                    if BASE_URL in link:
+                        full_link = '/' + link.split(BASE_URL)[-1].lstrip('/')
+                    else:
+                        continue  # External link
+                elif link.startswith('/'):
                     full_link = link
-                elif link.startswith('http'):
-                    # Skip external links
-                    continue
                 else:
                     full_link = '/' + link
                 

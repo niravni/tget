@@ -5,6 +5,7 @@ See the file 'LICENSE' for copying.
 
 import urllib.parse
 from html import unescape as html_decode
+import socket
 
 import requests
 
@@ -30,6 +31,12 @@ class Module(object):
         except requests.exceptions.Timeout:
             print("Error: Timeout when opening following url: {}".format(url))
             raise
+        except (requests.exceptions.ConnectionError, 
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error) as err:
+            print("Error: Network error when opening following url: {} - {}".format(url, err))
+            raise
         except Exception as err:
             print("Error when opening following url: {}.\n{}".format(err, url))
             raise err
@@ -45,6 +52,12 @@ class Module(object):
             return requests.get(url, headers=headers, timeout=timeout).text
         except requests.exceptions.Timeout:
             print("Error: Timeout when opening following url: {}".format(url))
+            raise
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error) as err:
+            print("Error: Network error when opening following url: {} - {}".format(url, err))
             raise
         except Exception as err:
             print("Error when opening following url: {}.\n{}".format(err, url))

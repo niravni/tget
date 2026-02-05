@@ -9,12 +9,14 @@ import itertools
 import json
 import logging
 import re
+import socket
 from collections import OrderedDict
 from importlib import import_module
 from json import dumps
 from sys import exit
 from urllib.error import HTTPError, URLError
 
+import requests
 from docopt import docopt
 
 from we_get.core.utils import (
@@ -176,7 +178,12 @@ class WGSelect(object):
                 else:
                     msg_error(" '%s' - no results" % (target), False)
                     continue
-            except (IndexError, HTTPError, URLError, json.decoder.JSONDecodeError) as err:
+            except (IndexError, HTTPError, URLError, json.decoder.JSONDecodeError,
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.RequestException,
+                    requests.exceptions.Timeout,
+                    socket.gaierror,
+                    socket.error) as err:
                 msg_error("Module: '%s.py' %s: %s!" % (target, type(err).__name__, err), False)
 
         """Sort self.items"""

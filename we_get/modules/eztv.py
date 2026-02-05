@@ -6,6 +6,7 @@ See the file 'LICENSE' for copying permission
 from we_get.core.module import Module
 import re
 import requests
+import socket
 
 BASE_URL = "https://eztv.io"
 SEARCH_LOC = "/search/%s/"
@@ -127,7 +128,11 @@ class eztv(object):
         try:
             data = self.module.http_get_request(url, timeout=10)
             self._parse_data(data)
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
             pass
         except Exception:
             pass
@@ -138,7 +143,11 @@ class eztv(object):
         try:
             data = self.module.http_get_request(url, timeout=10)
             self._parse_data(data)
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
             pass
         except Exception:
             pass

@@ -5,10 +5,10 @@ See the file 'LICENSE' for copying permission
 
 from we_get.core.module import Module
 import json
+import requests
+import socket
 
-BASE_URL = "https://yts.mx"
-SEARCH_LOC = "/api/v2/list_movies.json?query_term=%s&quality=%s&genre=%s"
-LIST_LOC = "/api/v2/list_movies.json?quality=%s&genre=%s"
+BASE_URL = "https://yts.bz"
 
 
 class yts(object):
@@ -30,7 +30,9 @@ class yts(object):
         for opt in self.pargs:
             if opt == "--search":
                 self.action = "search"
-                self.search_query = self.pargs[opt][0].replace(' ', '-')
+                # YTS API expects URL-encoded query, not dash-separated
+                from urllib.parse import quote_plus
+                self.search_query = quote_plus(self.pargs[opt][0])
             elif opt == "--list":
                 self.action = "list"
             elif opt == "--quality":
@@ -39,9 +41,14 @@ class yts(object):
                 self.genre = self.pargs[opt][0]
 
     def search(self):
-        url = "%s%s" % (
+        # YTS API format: quality and genre need proper formatting
+        quality_param = "&quality=%s" % self.quality if self.quality != "720p" else ""
+        genre_param = "&genre=%s" % self.genre if self.genre != "all" else ""
+        url = "%s/api/v2/list_movies.json?query_term=%s%s%s" % (
             BASE_URL,
-            SEARCH_LOC % (self.search_query, self.quality, self.genre)
+            self.search_query,
+            quality_param,
+            genre_param
         )
         try:
             response = self.module.http_get_request(url)
@@ -63,10 +70,23 @@ class yts(object):
                     })
         except (json.decoder.JSONDecodeError, KeyError, IndexError):
             return self.items
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                requests.exceptions.Timeout,
+                socket.gaierror,
+                socket.error):
+            return self.items
         return self.items
 
     def list(self):
-        url = "%s%s" % (BASE_URL, LIST_LOC % (self.quality, self.genre))
+        # YTS API format: quality and genre need proper formatting
+        params = []
+        if self.quality != "720p":
+            params.append("quality=%s" % self.quality)
+        if self.genre != "all":
+            params.append("genre=%s" % self.genre)
+        param_string = "?" + "&".join(params) if params else ""
+        url = "%s/api/v2/list_movies.json%s" % (BASE_URL, param_string)
         try:
             response = self.module.http_get_request(url)
             data = json.loads(response)
@@ -85,6 +105,12 @@ class yts(object):
                     self.items.update({torrent_name: {'leeches': str(leeches),
                                                       'seeds': str(seeds), 'link': link}})
         except (json.decoder.JSONDecodeError, KeyError, IndexError):
+            return self.items
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                requests.exceptions.Timeout,
+                socket.gaierror,
+                socket.error):
             return self.items
         return self.items
 

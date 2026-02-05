@@ -7,8 +7,9 @@ from urllib.parse import quote_plus
 from we_get.core.module import Module
 import re
 import requests
+import socket
 
-BASE_URL = "https://1337x.st"
+BASE_URL = "https://1337x.to"
 SEARCH_LOC = "/search/%s/1/"
 LIST_LOC = "/top-100"
 
@@ -99,7 +100,11 @@ class leetx(object):
                         )
                 except Exception:
                     pass
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
             pass
         except Exception:
             pass
@@ -151,7 +156,11 @@ class leetx(object):
                     except Exception:
                         # Skip this item and continue
                         continue
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
             pass
         except Exception:
             pass
@@ -195,7 +204,11 @@ class leetx(object):
                             results += 1
                     except Exception:
                         continue
-        except requests.exceptions.Timeout:
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
             pass
         except Exception:
             pass

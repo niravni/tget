@@ -6,6 +6,8 @@ See the file 'LICENSE' for copying permission
 from urllib.parse import quote_plus
 from we_get.core.module import Module
 import re
+import requests
+import socket
 
 BASE_URL = "https://www.limetorrents.lol/"
 SEARCH_LOC = "/search/all/%s/"
@@ -68,6 +70,12 @@ class limetorrents(object):
             item.update(
                 {name: {'seeds': seeders, 'leeches': leechers, 'link': magnet}}
             )
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
+            pass
         except Exception:
             pass
         return item
@@ -86,6 +94,12 @@ class limetorrents(object):
                 if item:
                     self.items.update(item)
                     results += 1
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
+            pass
         except Exception:
             pass
         return self.items
@@ -104,6 +118,12 @@ class limetorrents(object):
                 if item:
                     self.items.update(item)
                     results += 1
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+                socket.gaierror,
+                socket.error):
+            pass
         except Exception:
             pass
         return self.items

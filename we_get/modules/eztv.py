@@ -77,10 +77,25 @@ class eztv(object):
             # Look for any links that might be show pages
             episode_links = re.findall(r'href=["\']([^"\']*shows/[^"\']+)["\']', data, re.IGNORECASE)
         
+        # Also look for any internal links that might be show pages (not search, static, css, js)
+        if not episode_links:
+            all_hrefs = re.findall(r'href=["\']([^"\']+)["\']', data, re.IGNORECASE)
+            # Filter for internal links that look like show pages
+            episode_links = [link for link in all_hrefs 
+                           if link.startswith('/') and 
+                           not link.startswith('/search') and 
+                           not link.startswith('/static') and
+                           not link.startswith('/css') and
+                           not link.startswith('/js') and
+                           not link.startswith('/images') and
+                           not link.startswith('#') and
+                           len(link) > 3 and
+                           link.count('/') >= 2]  # Has at least 2 slashes (like /shows/123/)
+        
         if debug:
-            print(f"[DEBUG EZTV] Found {len(episode_links)} potential episode/show links")
+            print(f"[DEBUG EZTV] Found {len(episode_links)} potential episode/show links in entire HTML")
             if episode_links and len(episode_links) > 0:
-                print(f"[DEBUG EZTV] Sample episode link: {episode_links[0][:100]}")
+                print(f"[DEBUG EZTV] Sample episode/show links: {episode_links[:3]}")
         
         # Look for download links or .torrent files
         download_links = re.findall(r'href=["\']([^"\']*\.torrent)["\']', data, re.IGNORECASE)
@@ -195,7 +210,8 @@ class eztv(object):
                         print(f"[DEBUG EZTV] Filtered to {len(items)} potential torrent rows")
         
         # If we found episode links but no magnet links, try to fetch them
-        if episode_links and not magnet_links and not items:
+        # Also try if we have items but they don't contain magnet links
+        if episode_links and not magnet_links:
             if debug:
                 print(f"[DEBUG EZTV] No magnet links found, but found {len(episode_links)} episode links")
                 print(f"[DEBUG EZTV] EZTV may require visiting individual episode pages to get magnet links")
@@ -215,10 +231,11 @@ class eztv(object):
             if debug:
                 print(f"[DEBUG EZTV] Added {len(magnet_links)} direct magnet links to items")
         
-        # If we have episode links but no items, try to use them
-        if episode_links and not items and not magnet_links:
+        # If we have episode links but no magnet links, try to fetch them
+        # This will help even if we have items that don't contain magnet links
+        if episode_links and not magnet_links:
             if debug:
-                print(f"[DEBUG EZTV] Attempting to use episode links - will need to fetch each page")
+                print(f"[DEBUG EZTV] No magnet links found, attempting to fetch episode/show pages - will need to fetch each page")
             # Limit to first 10 episode links to avoid too many requests
             for ep_link in episode_links[:10]:
                 try:

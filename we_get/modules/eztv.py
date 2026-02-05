@@ -41,14 +41,41 @@ class eztv(object):
         if debug:
             print(f"[DEBUG EZTV] Starting to parse {len(data)} bytes of HTML")
         
-        # Clean up data
-        data = data.replace('\t', '').replace('\n', '')
+        # Search for magnet links in original data first (before cleaning)
+        # Try multiple patterns for magnet links
+        magnet_links = []
+        # Pattern A: Standard magnet:?xt=...
+        magnet_links.extend(re.findall(r'magnet:\?[^\'"\s<>"]+', data, re.IGNORECASE))
+        # Pattern B: magnet: with any characters (more flexible)
+        if not magnet_links:
+            magnet_links.extend(re.findall(r'magnet:[^\'"\s<>"]{20,}', data, re.IGNORECASE))
+        # Pattern C: Look for href with magnet
+        href_magnets = re.findall(r'href=["\']?(magnet:[^"\'>\s]+)', data, re.IGNORECASE)
+        if href_magnets:
+            magnet_links.extend(href_magnets)
         
-        # Try multiple patterns for finding torrent rows
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_magnet_links = []
+        for link in magnet_links:
+            if link not in seen:
+                seen.add(link)
+                unique_magnet_links.append(link)
+        magnet_links = unique_magnet_links
+        
+        if debug:
+            print(f"[DEBUG EZTV] Pattern 5 (direct magnet links) found {len(magnet_links)} magnet links in HTML")
+            if magnet_links and len(magnet_links) > 0:
+                print(f"[DEBUG EZTV] Sample magnet link (first 100 chars): {magnet_links[0][:100]}")
+        
+        # Clean up data for table row parsing
+        data_cleaned = data.replace('\t', '').replace('\n', '')
+        
+        # Try multiple patterns for finding torrent rows (use cleaned data)
         # Pattern 1: Original pattern
         items = re.findall(
             r'<tr[^>]*name=["\']hover["\'][^>]*class=["\']forum_header_border["\'][^>]*>(.*?)</tr>',
-            data,
+            data_cleaned,
             re.IGNORECASE | re.DOTALL
         )
         
@@ -59,7 +86,7 @@ class eztv(object):
         if not items:
             items = re.findall(
                 r'<tr[^>]*class=["\']forum_header_border["\'][^>]*>(.*?)</tr>',
-                data,
+                data_cleaned,
                 re.IGNORECASE | re.DOTALL
             )
             if debug:
@@ -69,7 +96,7 @@ class eztv(object):
         if not items:
             items = re.findall(
                 r'<tr[^>]*>(.*?magnet:.*?)</tr>',
-                data,
+                data_cleaned,
                 re.IGNORECASE | re.DOTALL
             )
             if debug:
@@ -79,17 +106,11 @@ class eztv(object):
         if not items:
             items = re.findall(
                 r'<tr[^>]*>(.*?)</tr>',
-                data,
+                data_cleaned,
                 re.IGNORECASE | re.DOTALL
             )
             if debug:
                 print(f"[DEBUG EZTV] Pattern 4 (any table row) found {len(items)} items")
-        
-        # Always check for magnet links directly in the HTML (Pattern 5)
-        # This is important because magnet links might not be in table rows
-        magnet_links = re.findall(r'(magnet:\?[^\'"\s<>]+)', data, re.IGNORECASE)
-        if debug:
-            print(f"[DEBUG EZTV] Pattern 5 (direct magnet links) found {len(magnet_links)} magnet links in HTML")
         
         # If we found magnet links but no items from table rows, use magnet links directly
         if magnet_links and not items:
